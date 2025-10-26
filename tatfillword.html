@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="tt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Филвордлар - Веб-уен</title>
+    <!-- Подключаем Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Стили для кастомного скроллбара (опционально) */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #4a5568; /* gray-600 */
+            border-radius: 20px;
+        }
+        
+        /* Основные стили */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            /* Запрет выделения текста */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        /* Стили для игрового поля */
+        #game-grid {
+            /* Запрет прокрутки страницы при касании поля */
+            touch-action: none;
+            display: grid;
+            border: 2px solid #4a5568; /* gray-600 */
+            border-radius: 0.5rem; /* rounded-lg */
+            overflow: hidden;
+            background-color: #2d3748; /* gray-700 */
+        }
+        
+        /* Стили для ячеек */
+        .grid-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem; /* text-2xl */
+            line-height: 2rem;
+            font-weight: 700; /* font-bold */
+            text-transform: uppercase;
+            background-color: #4a5568; /* gray-600 */
+            color: white;
+            border: 1px solid #2d3748; /* gray-700 */
+            /* Плавный переход для выделения */
+            transition: all 0.1s ease-in-out;
+            /* Фиксированный размер ячеек, aspect-square - делает их квадратными */
+            aspect-ratio: 1 / 1;
+        }
+
+        /* Ячейка в процессе выделения */
+        .grid-cell.selected {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        
+        /* Ячейка найденного слова */
+        .grid-cell.found-0 { background-color: #10b981; /* emerald-500 */ }
+        .grid-cell.found-1 { background-color: #f59e0b; /* amber-500 */ }
+        .grid-cell.found-2 { background-color: #ec4899; /* pink-500 */ }
+        .grid-cell.found-3 { background-color: #8b5cf6; /* violet-500 */ }
+        .grid-cell.found-4 { background-color: #ef4444; /* red-500 */ }
+        .grid-cell.found-5 { background-color: #06b6d4; /* cyan-500 */ }
+        .grid-cell.found-6 { background-color: #84cc16; /* lime-500 */ }
+        .grid-cell.found-7 { background-color: #d946ef; /* fuchsia-500 */ }
+
+        /* Анимация появления */
+        .grid-cell {
+            animation: popIn 0.3s ease-out forwards;
+            opacity: 0;
+            transform: scale(0.7);
+        }
+
+        @keyframes popIn {
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen overflow-hidden flex flex-col p-4">
+
+    <!-- Заголовок -->
+    <header class="text-center mb-4">
+        <h1 class="text-3xl font-bold text-white">Филвордлар</h1>
+    </header>
+
+    <!-- Основной контент -->
+    <main class="flex-1 flex flex-col md:flex-row items-center md:items-start justify-center gap-6 max-w-4xl w-full mx-auto">
+        
+        <!-- Левая колонка (Игровое поле) -->
+        <div class="flex flex-col items-center w-full max-w-md">
+            <!-- Статус игры -->
+            <div id="status-message" class="h-8 text-center mb-2 text-lg text-amber-400 font-semibold">
+                Йөкләнә...
+            </div>
+            
+            <!-- Игровое поле -->
+            <div id="game-grid" class="w-full">
+                <!-- Ячейки будут сгенерированы JavaScript -->
+            </div>
+        </div>
+
+        <!-- Правая колонка (Слова и Управление) -->
+        <div class="flex-1 w-full max-w-md md:max-w-xs">
+            <h2 class="text-xl font-semibold mb-3 text-center md:text-left">Сүзләрне табыгыз:</h2>
+            
+            <!-- Список слов -->
+            <div id="words-list" class="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
+                <!-- Слова будут сгенерированы JavaScript -->
+            </div>
+            
+            <!-- Кнопки управления -->
+            <div class="flex flex-col gap-3 mt-6">
+                <button id="reset-level-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
+                    Яңадан башлау
+                </button>
+                <button id="next-level-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg" style="display: none;">
+                    Киләсе дәрәҗә
+                </button>
+            </div>
+        </div>
+
+    </main>
+    
+    <!-- Модальное окно победы (скрыто по умолчанию) -->
+    <div id="win-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" style="display: none;">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-sm w-full text-center transform transition-all scale-95 opacity-0">
+            <h2 class="text-3xl font-bold text-green-400 mb-4">Җиңү!</h2>
+            <p class="text-lg text-gray-200 mb-6">Дәрәҗә үтелде. Бик яхшы!</p>
+            <button id="modal-next-level-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg">
+                Киләсе дәрәҗә
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- DOM Элементы ---
+            const gridEl = document.getElementById('game-grid');
+            const wordsListEl = document.getElementById('words-list');
+            const statusEl = document.getElementById('status-message');
+            const resetBtn = document.getElementById('reset-level-btn');
+            const nextBtn = document.getElementById('next-level-btn');
+            const winModal = document.getElementById('win-modal');
+            const modalNextBtn = document.getElementById('modal-next-level-btn');
+
+            // --- Константы ---
+            // Татарский алфавит
+            const ALPHABET = 'АӘБВГДEЕЁЖҖЗИНЙКЛМНПОРСТУҮФХҺЦЧШЩЪЫЬЭЮЯ';
+            
+            // --- Уровни Игры ---
+            // Слова на татарском языке, в ВЕРХНЕМ РЕГИСТРЕ
+            const LEVELS = [
+                { gridSize: 5, words: ['УЕН', 'СҮЗ', 'ХӘРЕФ', 'КЫР'] },
+                { gridSize: 6, words: ['ӨЙ', 'ЕЛГА', 'УРМАН', 'ТАУ', 'ДИҢГЕЗ', 'ҮЛӘН'] },
+                { gridSize: 7, words: ['МӘЧЕ', 'ЭТ', 'КОШ', 'БАЛЫК', 'ТЫЧКАН', 'ЕЛАН'] },
+                { gridSize: 7, words: ['ҖИМЕШ', 'ЯШЕЛЧӘ', 'АЛМА', 'БАНАН', 'СЛИВА'] },
+                { gridSize: 8, words: ['КЫШ', 'ҖӘЙ', 'ЯЗ', 'КӨЗ', 'ҺАВА', 'КАР', 'ЯҢГЫР'] }
+            ];
+
+            // --- Состояние Игры ---
+            let currentLevelIndex = 0;
+            let grid = []; // 2D массив для букв
+            let wordsToFind = [];
+            let foundWords = [];
+            let isSelecting = false;
+            let selectedCells = []; // { r, c, el }
+            let colorIndex = 0; // Для раскраски найденных слов
+
+            // --- Функции ---
+
+            /**
+             * Инициализация или загрузка уровня
+             */
+            function loadLevel(levelIndex) {
+                // Сброс состояния
+                currentLevelIndex = levelIndex;
+                const level = LEVELS[levelIndex % LEVELS.length]; // Зацикливаем уровни
+                wordsToFind = [...level.words];
+                foundWords = [];
+                selectedCells = [];
+                isSelecting = false;
+                grid = createEmptyGrid(level.gridSize);
+                
+                statusEl.textContent = 'Уен кыры ясала...';
+                
+                // Асинхронная генерация, чтобы UI не зависал
+                setTimeout(() => {
+                    const success = placeWords(level.gridSize, level.words);
+                    
+                    if (!success) {
+                        console.error("Сүзләрне урнаштырып булмады. Яңадан башлау...");
+                        loadLevel(levelIndex); // Пробуем еще раз
+                        return;
+                    }
+                    
+                    fillEmptyCells(level.gridSize);
+                    
+                    // Отрисовка
+                    renderGrid(level.gridSize);
+                    renderWordsList();
+                    statusEl.textContent = 'Барлык сүзләрне дә табыгыз!';
+                    
+                    // Управление кнопками
+                    nextBtn.style.display = 'none';
+                    winModal.style.display = 'none';
+                    if (winModal.lastChild) {
+                        winModal.children[0].classList.remove('scale-100', 'opacity-100');
+                        winModal.children[0].classList.add('scale-95', 'opacity-0');
+                    }
+                }, 50); // Небольшая задержка
+            }
+
+            /**
+             * Создает пустой 2D массив (сетку)
+             */
+            function createEmptyGrid(size) {
+                return Array(size).fill(null).map(() => Array(size).fill(null));
+            }
+
+            /**
+             * Размещает слова на сетке
+             * @returns {boolean} true, если все слова размещены
+             */
+            function placeWords(size, words) {
+                // Сортируем слова от длинного к короткому (им сложнее найти место)
+                const sortedWords = [...words].sort((a, b) => b.length - a.length);
+                
+                for (const word of sortedWords) {
+                    let placed = false;
+                    let attempts = 50; // 50 попыток найти место для слова
+                    
+                    while (!placed && attempts > 0) {
+                        // Случайная стартовая точка
+                        const r = randomInt(size);
+                        const c = randomInt(size);
+                        
+                        if (grid[r][c] === null) {
+                            let path = [];
+                            // Пытаемся рекурсивно найти путь для слова
+                            if (findPath(word, 0, r, c, size, path)) {
+                                // Если путь найден, размещаем слово на сетке
+                                path.forEach((pos, i) => {
+                                    grid[pos.r][pos.c] = word[i];
+                                });
+                                placed = true;
+                            }
+                        }
+                        attempts--;
+                    }
+                    
+                    if (!placed) {
+                        console.warn(`Сүзне урнаштырып булмады: ${word}`);
+                        return false; // Не удалось разместить слово, уровень надо генерировать заново
+                    }
+                }
+                return true;
+            }
+
+            /**
+             * Рекурсивный поиск пути для слова (бэктрекинг)
+             */
+            function findPath(word, index, r, c, size, path) {
+                // 1. Проверка границ
+                if (r < 0 || r >= size || c < 0 || c >= size) {
+                    return false;
+                }
+                
+                // 2. Проверка, занята ли ячейка (кроме как этим же путем)
+                if (grid[r][c] !== null && !path.some(p => p.r === r && p.c === c)) {
+                    return false;
+                }
+                
+                // 3. Добавляем текущую позицию в путь
+                path.push({ r, c });
+                grid[r][c] = word[index]; // Временно ставим букву
+
+                // 4. Проверка, дошли ли до конца слова
+                if (index === word.length - 1) {
+                    return true; // Слово успешно размещено
+                }
+
+                // 5. Пытаемся пойти в случайном направлении (соседи)
+                const neighbors = getShuffledNeighbors(r, c);
+                
+                for (const neighbor of neighbors) {
+                    // Проверяем, что еще не были в этой ячейке
+                    if (!path.some(p => p.r === neighbor.r && p.c === neighbor.c)) {
+                        if (findPath(word, index + 1, neighbor.r, neighbor.c, size, path)) {
+                            return true; // Путь найден
+                        }
+                    }
+                }
+
+                // 6. Бэктрекинг (путь не найден)
+                grid[r][c] = null; // Очищаем ячейку
+                path.pop(); // Убираем из пути
+                return false;
+            }
+
+            /**
+             * Заполняет пустые ячейки случайными буквами
+             */
+            function fillEmptyCells(size) {
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        if (grid[r][c] === null) {
+                            grid[r][c] = ALPHABET[randomInt(ALPHABET.length)];
+                        }
+                    }
+                }
+            }
+
+            /**
+             * Отрисовывает сетку в DOM
+             */
+            function renderGrid(size) {
+                gridEl.innerHTML = '';
+                gridEl.style.gridTemplateColumns = `repeat(${size}, minmax(0, 1fr))`;
+                
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'grid-cell';
+                        cell.textContent = grid[r][c];
+                        cell.dataset.r = r;
+                        cell.dataset.c = c;
+                        
+                        // Анимация появления
+                        cell.style.animationDelay = `${(r * size + c) * 0.015}s`;
+                        
+                        gridEl.appendChild(cell);
+                    }
+                }
+            }
+            
+            /**
+             * Отрисовывает список слов
+             */
+            function renderWordsList() {
+                wordsListEl.innerHTML = '';
+                // Сортируем: сначала ненайденные, потом найденные
+                const allWords = [...wordsToFind].sort((a, b) => {
+                    const foundA = foundWords.includes(a);
+                    const foundB = foundWords.includes(b);
+                    if (foundA && !foundB) return 1;
+                    if (!foundA && foundB) return -1;
+                    return 0;
+                });
+
+                for (const word of allWords) {
+                    const wordEl = document.createElement('span');
+                    wordEl.textContent = word;
+                    wordEl.className = 'px-3 py-1 rounded-full font-medium transition duration-200';
+                    
+                    if (foundWords.includes(word)) {
+                        wordEl.classList.add('line-through', 'text-gray-500', 'bg-gray-700');
+                    } else {
+                        wordEl.classList.add('text-gray-200', 'bg-gray-600', 'shadow');
+                    }
+                    wordsListEl.appendChild(wordEl);
+                }
+            }
+
+            // --- Обработчики событий ---
+
+            function handlePointerDown(e) {
+                const cell = e.target.closest('.grid-cell');
+                if (!cell || foundWords.some(w => cell.dataset.word === w)) return; // Не начинать с уже найденной
+                
+                e.preventDefault();
+                isSelecting = true;
+                selectedCells = [];
+                addCellToSelection(cell);
+            }
+
+            function handlePointerMove(e) {
+                if (!isSelecting) return;
+                e.preventDefault();
+                
+                // Находим элемент под указателем
+                const cell = document.elementFromPoint(e.touches ? e.touches[0].clientX : e.clientX, e.touches ? e.touches[0].clientY : e.clientY);
+                
+                if (!cell || !cell.classList.contains('grid-cell')) return;
+
+                const r = parseInt(cell.dataset.r);
+                const c = parseInt(cell.dataset.c);
+                
+                const alreadySelected = selectedCells.some(sc => sc.r === r && sc.c === c);
+                
+                if (!alreadySelected) {
+                    // Добавление новой ячейки
+                    const lastCell = selectedCells[selectedCells.length - 1];
+                    if (isAdjacent(lastCell.r, lastCell.c, r, c)) {
+                        addCellToSelection(cell);
+                    }
+                } else {
+                    // Бэктрекинг (отмена выбора)
+                    // Если текущая ячейка - предпоследняя в списке, убираем последнюю
+                    if (selectedCells.length > 1 && 
+                        selectedCells[selectedCells.length - 2].r === r &&
+                        selectedCells[selectedCells.length - 2].c === c) {
+                        const lastCell = selectedCells.pop();
+                        lastCell.el.classList.remove('selected');
+                    }
+                }
+            }
+
+            function handlePointerUp(e) {
+                if (!isSelecting) return;
+                isSelecting = false;
+                
+                checkSelection();
+                
+                // Очистка временного выделения
+                selectedCells.forEach(sc => sc.el.classList.remove('selected'));
+                selectedCells = [];
+            }
+            
+            /**
+             * Добавляет ячейку к списку выделенных
+             */
+            function addCellToSelection(cell) {
+                if (!cell) return;
+                const r = parseInt(cell.dataset.r);
+                const c = parseInt(cell.dataset.c);
+                
+                // Нельзя добавить уже найденную ячейку
+                if (cell.classList.value.includes('found-')) return;
+                
+                selectedCells.push({ r, c, el: cell });
+                cell.classList.add('selected');
+            }
+
+            /**
+             * Проверяет выделенное слово
+             */
+            function checkSelection() {
+                const selectedWord = selectedCells.map(sc => sc.el.textContent).join('');
+                
+                if (wordsToFind.includes(selectedWord) && !foundWords.includes(selectedWord)) {
+                    // --- Слово НАЙДЕНО ---
+                    foundWords.push(selectedWord);
+                    
+                    // Присваиваем постоянный цвет
+                    const foundColorClass = `found-${colorIndex % 8}`;
+                    colorIndex++;
+
+                    selectedCells.forEach(sc => {
+                        sc.el.classList.add(foundColorClass);
+                        sc.el.dataset.word = selectedWord; // Помечаем, к какому слову относится
+                    });
+                    
+                    statusEl.textContent = `Табылды: ${selectedWord}!`;
+                    renderWordsList();
+                    checkWinCondition();
+
+                } else if (selectedCells.length > 0) {
+                    // --- Слово НЕ НАЙДЕНО ---
+                    statusEl.textContent = 'Дөрес түгел!';
+                    setTimeout(() => {
+                        if (statusEl.textContent === 'Дөрес түгел!') {
+                             statusEl.textContent = 'Барлык сүзләрне дә табыгыз!';
+                        }
+                    }, 1000);
+                }
+            }
+            
+            /**
+             * Проверка на победу
+             */
+            function checkWinCondition() {
+                if (foundWords.length === wordsToFind.length) {
+                    statusEl.textContent = 'Дәрәҗә үтелде!';
+                    nextBtn.style.display = 'block';
+                    
+                    // Показываем модальное окно
+                    winModal.style.display = 'flex';
+                    setTimeout(() => {
+                         winModal.children[0].classList.add('scale-100', 'opacity-100');
+                    }, 10);
+                }
+            }
+            
+            /**
+             * Переход на следующий уровень
+             */
+            function goToNextLevel() {
+                loadLevel((currentLevelIndex + 1) % LEVELS.length);
+            }
+
+            // --- Вспомогательные функции ---
+            
+            function randomInt(max) {
+                return Math.floor(Math.random() * max);
+            }
+            
+            function getShuffledNeighbors(r, c) {
+                const neighbors = [
+                    { r: r - 1, c: c }, { r: r + 1, c: c },
+                    { r: r, c: c - 1 }, { r: r, c: c + 1 },
+                    // { r: r - 1, c: c - 1 }, { r: r - 1, c: c + 1 }, // Диагонали
+                    // { r: r + 1, c: c - 1 }, { r: r + 1, c: c + 1 }
+                ];
+                // Перемешиваем
+                return neighbors.sort(() => Math.random() - 0.5);
+            }
+            
+            function isAdjacent(r1, c1, r2, c2) {
+                const dr = Math.abs(r1 - r2);
+                const dc = Math.abs(c1 - c2);
+                // (dr <= 1 && dc <= 1) -> с диагоналями
+                // (dr + dc === 1) -> без диагоналей
+                return (dr + dc === 1); 
+            }
+
+            // --- Инициализация и привязка событий ---
+            
+            // Основные события для выбора
+            gridEl.addEventListener('pointerdown', handlePointerDown);
+            gridEl.addEventListener('pointermove', handlePointerMove);
+            // Используем window, чтобы отловить отпускание пальца/мыши в любом месте
+            window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
+
+            // Кнопки
+            resetBtn.addEventListener('click', () => loadLevel(currentLevelIndex));
+            nextBtn.addEventListener('click', goToNextLevel);
+            modalNextBtn.addEventListener('click', goToNextLevel);
+
+            // Запускаем игру
+            loadLevel(currentLevelIndex);
+        });
+    </script>
+</body>
+</html>
